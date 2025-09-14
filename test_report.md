@@ -58,7 +58,7 @@
 }
 ```
 **Screenshot:**
-![List Users Success](./screenshots/create_user_succes.png)
+![List Users Success](./screenshots/create_user_success.png)
 
 
 
