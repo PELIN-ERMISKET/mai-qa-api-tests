@@ -17,5 +17,5 @@
         "phone": "+15551234567",
         "last_login": null
     }
-**Screenshot:**  
-![List Users Success](./screenshots/List Users Success.png)
+**Screenshot:**
+![List Users Success](./screenshots/list_users_success.png)
