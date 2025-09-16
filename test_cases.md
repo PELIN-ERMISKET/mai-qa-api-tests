@@ -2661,7 +2661,7 @@ Sample Request (no body): None
 Screenshot
 ![DELETE-Delete_Admin](./screenshots/Delete_Admin.png)
 
-## Test #66 – DELETE /users/{id} (Invalid – Missing Bearer → 401)
+## Test #66 – DELETE /users/{id} (Invalid – Missing Basic Auth  → 401)
 
 Endpoint: DELETE /users/39
 Expected Result: 401 Unauthorized with "detail": "Not authenticated"
@@ -2682,37 +2682,36 @@ Body: none.
 }
 ```
 Screenshot
-![DELETE-Delete_Missing_Bearer](./screenshots/Delete_Missing_Bearer.png)
+![DELETE-Delete_Missing_Basic_Auth](./screenshots/Delete_Missing_Basic_Auth.png)
 
-## Test #67 – DELETE /users/{id} (Invalid/Expired Token → 401)
+## Test #67 – DELETE /users/{id} (Wrong Auth Scheme — Bearer instead of Basic → 401)
 
 Endpoint: DELETE /users/39
-Expected Result: 401 Unauthorized with an error like "detail": "Not authenticated" (or "Invalid token").
+Expected Result: 401 Unauthorized with "detail": "Not authenticated" because this endpoint requires Basic Auth and ignores Bearer tokens.
 Actual Result: 401 Unauthorized with "detail": "Not authenticated"
 Result: ✅ Pass
 
 Steps to Execute:
 1.Set method to DELETE, URL: {{baseUrl}}/users/39
-2.Go to Authorization → Type: Bearer Token
-3.Paste your valid token, then deliberately corrupt it (e.g., append x to the end)
-4.Ensure Headers include Accept: application/json (optional)
-5.Make sure Body is empty
-6.Click Send
-7.Verify that the response status is 401 and the body indicates token/auth error
+2.Authorization: Type = Bearer Token
+3.Paste any token (valid or corrupted)
+4.Headers: Accept: application/json (optional)
+5.Body: none , Send
+7.Verify status code is 401 and body contains "detail": "Not authenticated"
 
 Sample Request (headers):
-
 Authorization: Bearer 037d6b5a9450f01deb559cf9a737ce5x
 Accept: application/json
 
 **Sample Response Body:**
 ```json
-{
-  "detail": "Not authenticated"
-}
+
+{ "detail": "Not authenticated" }
+
 ```
 Screenshot
-![DELETE-Delete_Expired_Token](./screenshots/Delete_Expired_Token.png)
+![DELETE-Delete_Wrong_Auth_Scheme](./screenshots/Delete_Wrong_Auth_Scheme.png)
+
 
 ## Test #68 – DELETE /users/{id} (Invalid – Non-existent user → 404)
 
@@ -2723,7 +2722,7 @@ Result: ✅ Pass
 
 Steps to Execute:
 1.Method DELETE, URL: {{baseUrl}}/users/26585 (use a clearly non-existent id)
-2.Authorization: Bearer {{token}} (admin token)
+2.Authorization: Basic Auth (admin token)
 3.Headers: Accept: application/json (optional)
 4.Body: none
 5.Send and verify status and message
@@ -2746,7 +2745,7 @@ Result: ✅ Pass
 
 Steps to Execute:
 1.Set method to DELETE, URL {{baseUrl}}/users/11
-2.Authorization: Bearer {{admin_token}}
+2.Authorization: Basic (admin_user / Admin@2024)
 3.Body: none
 4.Send
 5.Verify status code 200
@@ -2771,3 +2770,375 @@ Follow-up: Test 65-repeat delete idempotent (200, was_active:false)
 
 Screenshot
 ![DELETE-Delete_Idempotent](./screenshots/Delete_Idempotent.png)
+
+## Test #70 – DELETE /users/{id} (Authorization Gap – Non-admin deletes another user)
+
+Endpoint: DELETE /users/4
+Preconditions: A non-admin user exists with known creds ({{attacker_username}} / {{attacker_password}}). ID=4 is a different user (not admin_user and not the attacker).
+Expected Result: 403 Forbidden with an authorization error.
+Actual Result: 200 OK with { "message": "User deleted successfully", "was_active": true }.
+Result: ❌ Fail
+
+Steps to Execute:
+1.Set method to DELETE and URL to {{baseUrl}}/users/4
+2.Authorization: Basic → Username={{attacker_username}}, Password={{attacker_password}}
+3.Headers: Accept: application/json
+4.Body: none
+5.Send
+6.Verify status code should be 403 (observed 200)
+7.Verify response body unexpectedly contains "message":"User deleted successfully" and "was_active": true
+
+**Sample Response:**
+```json
+
+{
+  "message": "User deleted successfully",
+  "was_active": true
+}
+```
+Screenshot
+![DELETE-Delete_BUG-009](./screenshots/BUG-009.png)
+
+## Test #71 – DELETE /users/{selfId} (Policy – Self-delete should be forbidden)
+
+Endpoint: DELETE /users/{{selfId}} (e.g., /users/41)
+Expected Result: 403 Forbidden; account must remain active.
+Actual Result: 200 OK with { "message": "User deleted successfully", "was_active": true }.
+Result: ❌ Fail
+
+Steps to Execute:
+1.Set method to DELETE and URL to {{baseUrl}}/users/{{selfId}} (e.g., /users/41)
+2.Authorization: Basic → Username={{self_username}}, Password={{self_password}} (e.g., attacker_1758004274/oldnew1)
+3.Headers: Accept: application/json
+4.Body: none
+5.Send
+6.Verify status code should be 403 (observed 200)
+7.Verify response erroneously contains "message":"User deleted successfully" and "was_active": true
+
+**Sample Response:**
+```json
+{
+  "message": "User deleted successfully",
+  "was_active": true
+}
+```
+Screenshot
+![DELETE-Delete_BUG-010](./screenshots/BUG-010.png)
+
+## Test #72 – GET /users/{id} after delete (Observed Soft – 200 + is_active:false)
+
+Endpoint: GET /users/40
+Precondition: User 40 was deleted via DELETE /users/40
+Expected Result: 200 OK and "is_active": false
+Actual Result: 200 OK and "is_active": false
+Result: ✅ Pass
+Steps to Execute:
+1.Set method to GET and URL to {{baseUrl}}/users/40
+2.Authorization: No Auth
+3.Headers: Accept: application/json
+4.Send
+5.Verify status code is 200
+6.Verify response contains "is_active": false
+
+**Sample Response:**
+```json
+{
+  "id": 40,
+  "username": "victim_...",
+  "is_active": false
+}
+```
+Screenshot
+![DELETE-GET_Check_Observed_Soft](./screenshots/GET_Check_Observed_Soft.png)
+
+## Test #73 – List excludes deleted user (Hard-delete expectation) → Spec mismatch
+
+Endpoint: GET /users?limit=100&offset=0&sort_by=id&order=desc
+Precondition: User 40 was deleted via DELETE /users/40
+Expected Result: Deleted user should be absent from the list (hard-delete expectation)
+Actual Result: User 40 still appears in the list with "is_active": false (soft delete behavior)
+Result: ❌ Fail (Spec mismatch – API is soft delete by design)
+
+Steps to Execute:
+1.Set method to GET and URL to {{baseUrl}}/users?limit=100&offset=0&sort_by=id&order=desc
+2.Authorization: No Auth
+3.Headers: Accept: application/json
+4.Send
+5.Verify user 40 should be absent (hard-delete expectation)
+6.Observe user 40 is present with "is_active": false
+
+Sample Observation:
+```json
+{
+  "id": 40,
+  "username": "victim_...",
+  "is_active": false
+}
+```
+Screenshot
+![DELETE-GET-Hard-delete_expectation](./screenshots/GET-Hard-delete_expectation.png)
+
+Note: This is not an implementation bug; it’s a spec decision (soft delete). Consider updating requirements or adding filters to exclude inactive users.
+
+## Test #74 – DELETE /users/{id} (Invalid path format: alpha/SQL Injection attempt → 422)
+
+Endpoint: DELETE /users/{id}
+Preconditions: None
+Expected Result: 422 Unprocessable Entity when {id} is not an integer (e.g., abc, 1 OR 1=1).
+Actual Result: 422 Unprocessable Entity with validation error (int_parsing).
+Result: ✅ Pass
+
+Steps to Execute:
+1.Set method to DELETE and URL to {{baseUrl}}/users/abc
+2.Authorization: Basic (admin_user / Admin@2024)
+3.Headers: Accept: application/json
+4.Send and verify status 422
+5.Set method to DELETE and URL to {{baseUrl}}/users/1%20OR%201=1
+6.Authorization: Basic (admin_user / Admin@2024)
+7.Headers: Accept: application/json
+8.Send and verify status 422
+
+**Sample Response:**
+```json
+{
+  "detail": [
+  {
+  "type": "int_parsing",
+  "loc": [
+ "path",
+ "user_id"
+ ],
+"msg": "Input should be a valid integer, unable to parse string as an integer",
+ "input": "1 OR 1=1"
+ }
+]
+}
+```
+Screenshot
+![DELETE-Delete_Invalid_path_format](./screenshots/Delete_Invalid_path_format.png)
+
+## Test #75 – POST /users (Rate Limit – 101 requests in 1 minute → 429)
+
+Endpoint: POST /users
+Expected Result: First 100 requests return 201 Created; the 101st request within the same 60-second window returns 429 Too Many Requests with {"detail":"Rate limit exceeded"}
+Actual Result: First 100 → 201; 101st → 429 with detail: "Rate limit exceeded"
+Result: ✅ Pass
+
+Steps to Execute
+1.Set method to POST and URL to {{baseUrl}}/users.
+2.Add header Content-Type: application/json.
+3.Body → raw → JSON; use dynamic values to avoid duplicates (e.g., {{$timestamp}} / {{$randomInt}}).
+4.Right-click the single request “POST Create User” (paper-plane icon) and choose Run.
+5.In Runner: Iterations=101, Delay=0 ms, keep variables enabled; run the single request only.
+6.Verify iterations 1–100 return 201 Created; iteration 101 returns 429 with body {"detail":"Rate limit exceeded"}.
+7.Capture the run summary and the 101st response as evidence.
+
+**Sample Request Body:**
+```json
+{
+  "username": "rl_{{$timestamp}}",
+  "email": "rl_{{$timestamp}}@example.com",
+  "password": "oldnew1",
+  "age": 25,
+  "phone": "+1555{{$randomInt}}"
+}
+```
+
+**Sample 429 Response:**
+```json
+{
+  "detail": "Rate limit exceeded"
+}
+```
+Screenshot
+![POST-Users_Rate_Limit](./screenshots/Users_Rate_Limit.png)
+
+## Test #76 – POST /login (No Rate Limit → Brute-Force Risk)
+
+Endpoint: POST /login
+Expected Result: After multiple failed attempts within a 60-second window, once the threshold (e.g., 100) is exceeded, respond with 429 Too Many Requests (or apply a temporary lockout).
+Actual Result: For 101 consecutive failed attempts, every response was 401 Unauthorized; no 429 was returned (no rate limit).
+Result: ❌ Fail (Security finding)
+
+Steps to Execute
+
+1.Set method to POST and URL to {{baseUrl}}/login.
+2.Body → raw → JSON; provide an invalid password.
+3.In the left panel, right-click POST /Login_Wrong_password → Run.
+4.In Runner set Iterations = 101, Delay = 0 ms; ensure only this single request is selected.
+5.Run and verify all responses are 401 Unauthorized and no 429 appears.
+6.Capture the run summary and a few sample responses as evidence.
+
+**Sample Request Body:**
+```json
+
+{
+  "username": "admin_user",
+  "password": "Admin@WRONG"
+}
+```
+Screenshot
+![POST-Login_Brute_Force_Risk](./screenshots/Login_Brute_Force_Risk.png)
+
+Note (classification): This is not a functional bug — the rate limiter applies only to POST /users, not to POST /login; returning 401 is expected by design.
+Recommendation: Add brute-force protection.
+
+## Test #77 – GET /stats?include_details=true (Info Disclosure: emails & session tokens exposed without auth)
+
+Endpoint: GET /stats?include_details=true
+Expected Result: 401/403 unless an admin is authenticated. Even for admins, the response should never return raw user_emails or session_tokens (only aggregated counts).
+Actual Result: 200 OK without any authorization; response includes user_emails list and session_tokens array.
+Result: ❌ Fail (Security finding – Sensitive Data Exposure / CWE-200, session token exposure → possible account takeover)
+
+Steps to Execute
+
+1.Method GET, URL {{baseUrl}}/stats?include_details=true.
+2.Ensure no Authorization header is sent.
+3.Send the request; observe 200 OK and presence of "user_emails" and "session_tokens" in the body.
+
+**Sample Response (truncated)**
+```json
+{
+  "total_users": 40,
+    "active_users": 35,
+    "inactive_users": 5,
+    "active_sessions": 3,
+    "api_version": "1.0.0",
+    "user_emails": [
+    "new_userd@example.com",
+    "victim_17580032033@example.com",
+    "attacker_1758004247@example.com"
+  ],
+  "session_tokens": [
+    "e694542a755bdc1dbd72fba2302f51ac",
+    "037d6b5a9450f01deb559cf9a737ce5x",
+    "f9d2f43a83be47c176d8a4bf6c1e6738"
+  ]
+}
+
+```
+Screenshot
+![GET-Token_BUG-011](./screenshots/BUG-011.png)
+
+## Test #78 – POST /logout (Logout consistency – invalid/missing Bearer returns 200 instead of 401)
+
+Endpoint: POST /logout
+Expected Result: When the Authorization header is missing or contains an invalid Bearer token, the API should respond with 401 Unauthorized (or at least the same generic response for both cases).
+Actual Result:
+
+Case A (No Auth): 200 OK with {"message":"No active session"}
+
+Case B (Invalid Bearer, e.g., token=deadbeef): 200 OK with {"message":"Logged out successfully"}
+Result: ❌ Fail (consistency & security semantics)
+
+Steps to Execute
+
+1.Method POST, URL {{baseUrl}}/logout.
+2.Case A – Missing token: Authorization → No Auth → Send → observe 200 OK and body {"message":"No active session"}.
+3.Case B – Invalid token: Authorization → Bearer Token, Token=deadbeef → Send → observe 200 OK and body {"message":"Logged out successfully"}.
+4.Capture both responses as evidence (screenshots attached).
+
+**Sample Responses**
+
+Case A (No Auth):
+```json
+{ "message": "No active session" }
+```
+Case B (Invalid Bearer):
+
+```json
+{ "message": "Logged out successfully" }
+```
+Screenshot
+![POST-Logout_BUG-012_A](./screenshots/BUG-012_A.png)
+Screenshot
+![POST-Logout_BUG-012_B](./screenshots/BUG-012_B.png)
+
+## Test #79 – POST /logout (Positive: session invalidation)
+
+Endpoint: POST /logout
+Expected Result:200 OK with body {"message":"Logged out successfully"}.
+Any subsequent call to a protected endpoint with the same token returns 401 Unauthorized with "Invalid session".
+Actual Result:200 OK + "Logged out successfully" (SS1).
+Then PUT /users/{id} with the same token → 401 Unauthorized + "Invalid session" (SS2). ✅
+Result: ✅ Pass
+
+Steps
+
+1.Log in via POST /login and capture the token.
+2.Send POST {{baseUrl}}/logout with Authorization: Bearer {{token}}.
+3.Verify response is 200 OK and message is "Logged out successfully".
+4.Reuse the same token on a protected request (e.g., PUT {{baseUrl}}/users/{id}).
+5.Verify it returns 401 Unauthorized with "Invalid session".
+
+Sample 200 Response (logout):
+```json
+{ "message": "Logged out successfully" }
+```
+Sample 401 Response (after logout):
+```json
+{ "detail": "Invalid session" }
+```
+Screenshot
+![POST-Logout_check](./screenshots/Logout_check.png)
+
+## Test #80 – GET /health (Positive: session metric reflects login/logout)
+
+Endpoint: GET /health
+Expected Result: 200 OK with body containing status, timestamp, memory_users, memory_sessions. After login, memory_sessions_after_login > memory_sessions_baseline. After logout, memory_sessions_after_logout < memory_sessions_after_login.
+Actual Result: 200 OK + health payload (SS1). After login, memory_sessions increased (SS2). After logout, memory_sessions decreased (SS3). 
+Result: ✅ Pass
+
+Steps
+1.GET {{baseUrl}}/health and record memory_sessions as A.
+2.POST {{baseUrl}}/login with valid creds, capture token.
+3.GET {{baseUrl}}/health again → record memory_sessions as B; verify B > A.
+4.POST {{baseUrl}}/logout with Authorization: Bearer {{token}}.
+5.GET {{baseUrl}}/health again → record memory_sessions as C; verify C < B.
+
+Sample 200 Response (health):
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-09-16T16:57:26.484620",
+  "memory_users": 11406,
+  "memory_sessions": 847
+}
+```
+Screenshot
+![GET-health_login_logout](./screenshots/health_login_logout.png)
+
+## Test #81 – POST /login (Regression: No lockout after multiple failed attempts)
+
+Endpoint: POST /login
+Preconditions: A valid user exists (e.g., username: rl_1758032074, password: oldnew50).
+Expected Result: Multiple consecutive invalid logins return 401 Unauthorized with {"detail":"Invalid username or password"}. Immediately after, a valid login succeeds with 200 OK and a 32-char token (no lockout).
+Actual Result: 4× 401 Unauthorized for wrong password (SS1–SS4). 5th request with correct password → 200 OK with token, expires_in, user_id (SS5). 
+Result: ✅ Pass
+
+Steps
+1.POST /login with wrong password 4 times:
+Body:
+```json
+{ "username":"rl_1758032074", "password":"Wrong@123" }
+```
+
+Expect: 401 and {"detail":"Invalid username or password"} each time.
+2.POST /login with correct password:
+Body:
+```json
+{ "username":"rl_1758032074", "password":"oldnew50" }
+```
+
+Expect: 200 OK and JSON with 32-char token, expires_in: 86400, user_id.
+
+Sample 200 Response (successful login)
+```json
+{ "token": "4a80dab23442938a8bbdf061f54a5a7d", "expires_in": 86400, "user_id": 242 }
+```
+Screenshot
+![POST-Login_Regression](./screenshots/Login_Regression.png)
+
+Notes
+
+Current implementation does not enforce lockout; this test documents that behavior. If the requirement is “lock after N failures,” log as an improvement/bug.

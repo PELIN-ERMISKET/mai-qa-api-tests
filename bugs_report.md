@@ -81,9 +81,10 @@ Evidence:
 
 ```
 // Response
+201 Created
+
 ```json
 
-201 Created
 {
     "id": 20,
     "username": "user_neww",
@@ -134,10 +135,10 @@ Evidence:
 
 ```
 // Response
-```json
-
 
 201 Created
+```json
+
 {
   "id": 19,
   "username": "usernewuser",
@@ -186,9 +187,9 @@ Evidence:
 
 ```
 // Response
-```json
 
 201 Created
+```json
 {
   "id": 38,
   "username": "ph1757942908198",
@@ -203,7 +204,7 @@ Evidence:
 Screenshot
 ![Create_Username_BUG-004](./screenshots/BUG-004.png)
 
-BUG-005: Missing Ownership Check – Any User Can Update Other Users (IDOR/BOLA) via PUT /users/{id}
+## BUG-005: Missing Ownership Check – Any User Can Update Other Users (IDOR/BOLA) via PUT /users/{id}
 
 Severity: Critical
 Category: Security / Authorization (IDOR/BOLA)
@@ -231,8 +232,8 @@ The API responds 200 OK and updates the other user’s record.
 Evidence:
 
 // Request 
-```json (token belongs to user_id=7; path targets user_id=11)
-
+(token belongs to user_id=7; path targets user_id=11)
+```json 
 {
   "phone": "+19175551236"
 }
@@ -277,12 +278,12 @@ Actual Result:
 Evidence:
 
 // Request 
-```json
+
 
 PUT /users/7
 Authorization: Bearer {{token}}
 Content-Type: application/json
-
+```json
 {
   "phone": "string"
 }
@@ -328,12 +329,13 @@ If you receive 200 OK, this is a BUG .
 
 Evidence:
 // Request 
-```json
+
 
 PUT /users/7
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
+```json
 {
   "phone": "+1917555123456789"
 }
@@ -408,4 +410,219 @@ Impact/Risks:
 Inconsistent schema enforcement; clients can ship invalid payloads undetected.
 Increases risk of Mass Assignment if server-side model binding changes.
 Data integrity and auditability concerns.
+
+## BUG-009: DELETE /users/{id} allows non-admin to delete other users (Authorization Gap)
+
+Severity: Critical
+Category: Authorization / Access Control
+
+Description:
+A regular (non-admin) authenticated user can delete another user via Basic Auth. The endpoint lacks role/ownership checks, allowing unauthorized deactivation (soft delete).
+
+Steps to Reproduce:
+1.Set method to DELETE and URL to {{baseUrl}}/users/4
+2.Authorization: Basic → Username={{attacker_username}}, Password={{attacker_password}}
+3.Headers: Accept: application/json
+4.Body: none
+5.Send the request
+
+Expected Result:
+403 Forbidden with an authorization error; target account remains active.
+
+Actual Result:
+200 OK with:
+
+{
+  "message": "User deleted successfully",
+  "was_active": true
+}
+
+// Request 
+
+DELETE /users/4
+Authorization: Basic ({{attacker_username}}:{{attacker_password}})
+Accept: application/json
+
+// Response
+```json
+
+{
+  "message": "User deleted successfully",
+  "was_active": true
+}
+```
+Screenshot
+![DELETE-Delete_BUG-009](./screenshots/Delete_BUG-009.png)
+
+Impact:
+Any non-admin can deactivate arbitrary users (including privileged accounts), leading to account lockout/DoS.
+
+## BUG-010: DELETE /users/{selfId} allows user to delete own account (Self-delete)
+
+Severity: High
+Category: Authorization / Policy
+
+Description:
+A regular user can soft-delete their own account via Basic Auth. There is no policy/role check to prevent self-deletion, leading to account lockout.
+
+Steps to Reproduce:
+1.Set method to DELETE and URL to {{baseUrl}}/users/{{selfId}} (e.g., /users/41)
+2.Authorization: Basic → Username={{self_username}}, Password={{self_password}}
+3.Headers: Accept: application/json
+4.Body: none
+5.Send the request
+
+Expected Result:
+403 Forbidden (or 405) and the account remains active (no state change).
+
+Actual Result:
+200 OK with
+
+Evidence:
+// Request
+
+DELETE /users/41
+Authorization: Basic ({{attacker_1758004274}}:{{attacker_password}})
+Accept: application/json
+
+
+// Response
+```json
+{
+  "message": "User deleted successfully",
+  "was_active": true
+}
+```
+Screenshot
+![DELETE-Delete_BUG-010](./screenshots/Delete_BUG-010.png)
+
+Impact:
+Users can lock themselves out; risk of unintended service denial and support overhead.
+
+## BUG-011: GET /session tokens without auth (Sensitive Data Exposure)
+
+Severity: Critical
+Category: Sensitive Data Exposure / Missing Authorization
+
+Description:
+The unauthenticated GET /stats?include_details=true endpoint returns sensitive data, including a full list of user emails and active session tokens. This is an information-disclosure vulnerability that enables account takeover (session hijacking), user enumeration, and privacy breaches.
+
+Steps to Reproduce:
+
+1.Set method to GET and URL to {{baseUrl}}/stats?include_details=true.
+2.Authorization: No Auth.
+3.Headers: Accept: application/json.
+4.Send the request.
+
+Expected Result:
+
+401 Unauthorized or 403 Forbidden for unauthenticated callers;
+or 200 OK with only aggregated, non-sensitive metrics (no emails or tokens).
+
+Actual Result:
+
+200 OK with user_emails array and session_tokens array returned to an unauthenticated client.
+
+Evidence:
+
+// Request
+
+GET /stats?include_details=true
+Accept: application/json
+Authorization: (none)
+
+
+// Response (truncated)
+```json
+{
+  "total_users": 41,
+  "active_users": 40,
+  "inactive_users": 1,
+  "active_sessions": 3,
+  "api_version": "1.0.0",
+  "user_emails": [
+    "john@example.com",
+    "jane@example.com",
+    "victim_1758004274@example.com"
+  ],
+  "session_tokens": [
+    "6945a24a755bdc110db72fba2302f51c",
+    "037d6b5a9450f01deb559cf9a737ce5x",
+    "f9d2f4a33be47c17d68a4bfc61166738"
+  ]
+}
+```
+
+Impact:
+
+Immediate account takeover risk via exposed session tokens (Bearer tokens).
+
+Privacy breach and phishing/targeting risk from bulk email exposure.
+
+Enables user enumeration and reconnaissance against the system.
+
+Screenshot
+![GET-Token_BUG-011](./screenshots/BUG-011.png)
+
+## BUG-012: POST /logout returns 200 for missing/invalid Bearer token (expected 401) — inconsistent auth
+
+Severity: Medium
+Category: Authentication / Session Management
+
+Description
+The /logout endpoint responds with 200 OK both when the Authorization header is absent and when it contains an invalid Bearer token. Other protected endpoints use verify_session() and correctly return 401 Unauthorized for invalid/missing tokens. This inconsistency weakens session handling and makes client/error handling and security monitoring unreliable.
+
+Steps to Reproduce
+
+1.Set method to POST, URL {{baseUrl}}/logout.
+2.Case A – No Auth: Authorization → No Auth. Send.
+3.Case B – Invalid Bearer: Authorization → Bearer Token, Token = deadbeef. Send.
+
+Expected Result
+*401 Unauthorized for missing or invalid Authorization: Bearer …, optionally with WWW-Authenticate: Bearer.
+*Only when a valid session token is presented and revoked should the endpoint return 200 OK (or 204 No Content, if choosing idempotent logout semantics).
+
+Actual Result
+
+Case A (No Auth): 200 OK with body:
+```json
+{ "message": "No active session" }
+```
+
+Case B (Invalid Bearer): 200 OK with body:
+```json
+{ "message": "Logged out successfully" }
+```
+Evidence
+
+Request (A):POST /logout
+     Accept: application/json
+
+Response (A): 200 OK
+```json
+{ "message": "No active session" }
+```
+
+Request (B):POST /logout
+      Authorization: Bearer deadbeef
+      Accept: application/json
+
+Response (B): 200 OK
+```json
+{ "message": "Logged out successfully" }
+```
+
+Screenshots
+
+Screenshot
+![POST-Logout_BUG-012_A](./screenshots/BUG-012_A.png)
+Screenshot
+![POST-Logout_BUG-012_B](./screenshots/BUG-012_B.png)
+
+Impact
+
+Unauthenticated requests appear “successful,” obscuring misuse in logs/metrics.
+Clients cannot reliably detect expired/invalid sessions (no 401), complicating UX and error handling.
+Inconsistent with the rest of the API’s authentication rules.
+
 
