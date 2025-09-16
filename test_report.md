@@ -1,0 +1,153 @@
+## Test Report — User Management API (v1.0)
+
+Scope & approach. I tested the User Management API with a hybrid plan: 
+(1) manual Postman runs for core flows and edge cases, and 
+(2) a pytest automation suite organized by feature: user creation/retrieval/update/deletion, authentication, system endpoints, and security checks. The automation classes include TestAuthentication, TestSystemEndpoints, and TestSecurityVulnerabilities, covering health/stats/root plus auth and negative-security paths.
+
+## Scope & Environment
+
+--Scope: Endpoints — /users (CRUD), /login, /logout, /health, /stats, /users/search. Test categories — TestUserCreation, TestUserRetrieval, TestUserUpdate, TestUserDeletion, TestAuthentication, TestSystemEndpoints, TestSecurityVulnerabilities.
+--Environment: {{baseUrl}} = http://localhost:8000
+--Tools: Postman (manual), pytest (automation), VS Code, GitHub (public repo)
+--Test Data: admin_user / Admin@2024
+
+## Test Inventory & Results
+
+| ID | Endpoint         | Type                     | Status      | Evidence                                                       |
+|  1 | GET /users       | Positive (List Users)    | ✅ Pass    | ![List Users Success](./screenshots/list_users_success.png)     |
+|  2 | POST /users      | Positive (Create User)   | ✅ Pass    | ![Create User Success](./screenshots/create_user_success.png)   |
+|  3 | POST /users      | Negative (validation)    | ✅ Pass    | ![Username_too_short](./screenshots/Username_too_short.png)     |
+|  4 | POST /users      | Boundary (Boundary)      | ✅ Pass    | ![Username_50chars](./screenshots/Username_50chars.png)         |
+|  5 | POST /users      | Boundary (Boundary)      | ✅ Pass    | ![Username_min_length](./screenshots/Username_min_length.png)   |
+|  6 | POST /users      | Negative (validation)    | ✅ Pass    | ![Username_tool_long](./screenshots/Username_tool_long.png)     |
+|  7 | POST /users      | Negative (validation)    | ✅ Pass    | ![Username must be a string](./screenshots/Username_string.png) |
+|  8 | POST /users      | Negative (validation)    | ✅ Pass    | ![Username  Null](./screenshots/Username_Null.png)              |
+|  9 | POST /users      | Negative (validation)    | ✅ Pass    | ![Username Empty String](./screenshots/Username_Empty_String.png)|
+| 10 | POST /users      | Negative (validation)    | ✅ Pass    | ![Duplicate Username](./screenshots/Duplicate_Username.png)     |
+| 11 | POST /users      | Negative (validation)    | ✅ Pass    | ![Username with space](./screenshots/Username_with_space.png)   |
+| 12 | POST /users      | Negative (validation)    | ✅ Pass    | ![Username  ](./screenshots/Username_invalid_characters.png)    |
+| 13 | POST /users      | Negative (validation)    | ✅ Pass    | ![Username_spaces](./screenshots/Username_spaces.png)           |
+| 14 | POST /users      | Negative (validation)    | ✅ Pass    | ![Username](./screenshots/Username_contains_underscore.png)     |
+| 15 | POST /users      | Negative (validation)    | ❌ Fail    | ![Create_Username_BUG-001](./screenshots/BUG-001.png)           |
+| 16 | POST /users      | Negative (validation)    | ✅ Pass    | ![Create_Username](./screenshots/Email_missing.png)             |
+| 17 | POST /users      | Negative (validation)    | ✅ Pass    | ![Create_Username](./screenshots/Email_missing_domain.png)      |
+| 18 | POST /users      | Negative (validation)    | ✅ Pass    | ![Create_Username_](./screenshots/Email_Empty_String.png)       |
+| 19 | POST /users      | Negative (validation)    | ✅ Pass    | ![Create_Username_Email_Null](./screenshots/Email_Null.png)     |
+| 20 | POST /users      | Negative (validation)    | ❌ Fail    | ![Create_Username_BUG-002](./screenshots/BUG-002.png)           |
+| 21 | POST /users      | Negative (validation)    | ❌ Fail    | ![Create_Username_BUG-003](./screenshots/BUG-003.png)           |
+| 22 | POST /users      | Boundary (Boundary  )    | ✅ Pass    | ![Create Boundary](./screenshots/Password_length.png)           |
+| 23 | POST /users      | Negative (validation)    | ✅ Pass    | ![Create Boundary_Password](./screenshots/Password_short.png)   |
+| 24 | POST /users      | Negative (validation)    | ✅ Pass    | ![Create Boundary_Password](./screenshots/Password_empty.png)   |
+| 25 | POST /users      | Negative (validation)    | ✅ Pass    | ![Create Boundary_Password_](./screenshots/Password_null.png)   |
+| 26 | POST /users      | Negative (validation)    | ✅ Pass    | ![Create Boundary_](./screenshots/Password_non-string.png)      |
+| 27 | POST /users      | Positive (Password )     | ✅ Pass    | ![Create Boundary](./screenshots/Password_only_spaces.png)      |
+| 28 | POST /users      | Positive (Password )     | ✅ Pass    | ![Create](./screenshots/Password_trailing_spaces.png)           |
+| 29 | POST /users      | Positive (Password )     | ✅ Pass    | ![Create Boundary](./screenshots/Password_very_long.png)        |
+| 30 | POST /users      | Positive (Password )     | ✅ Pass    | ![Create](./screenshots/Password_special_characters.png)        |
+| 31 | POST /users      | Positive (Password )     | ✅ Pass    | ![Create Boundary_Password](./screenshots/Password_Unicode.png) |
+| 33 | POST /users      | Security (Security )     | ✅ Pass    | ![Create](./screenshots/Password_NOT_appear_in_response.png)    |
+| 34 | POST /users      | Boundary (Boundary)      | ✅ Pass    | ![Create Boundary_Boundary_](./screenshots/Boundary_Age18.png)  |
+| 35 | POST /users      | Boundary (Boundary)      | ✅ Pass    | ![Create Boundary_Boundary](./screenshots/Boundary_Age_150.png) |
+| 36 | POST /users      | Negative (validation)    | ✅ Pass    | ![Create Boundary_Boundary](./screenshots/Boundary_Age_min.png) |
+| 37 | POST /users      | Negative (validation)    | ✅ Pass    | ![Create Boundary_Boundary](./screenshots/Boundary_Age_max.png) |
+| 39 | POST /users      | Negative (validation)    | ✅ Pass    | ![Create Boundary_Age_not_int](./screenshots/Age_not_int.png)   |
+| 40 | POST /users      | Negative (validation)    | ✅ Pass    | ![Create Boundary_Age_float](./screenshots/Age_float.png)       |
+| 41 | POST /users      | Negative (validation)    | ✅ Pass    | ![Create Boundary_Age_null](./screenshots/Age_null.png)         |
+| 42 | POST /users      | Negative (validation)    | ✅ Pass    | ![Create Boundary_Age_Empty](./screenshots/Age_Empty.png)       |
+| 43 | POST /users      | Positive (Valid Phone)   | ✅ Pass    | ![Create User_Phone_](./screenshots/Phone_E_164_format.png)     |
+| 44 | POST /users      | Boundary (Boundary)      | ✅ Pass    | ![Create User_Phone_](./screenshots/Phone_Boundary_9.png)       |
+| 45 | POST /users      | Boundary (Boundary)      | ✅ Pass    | ![Create User_Phone_Bound](./screenshots/Phone_Boundary_15.png) |
+| 46 | POST /users      | Positive (Valid)         | ✅ Pass    | ![Create User_Phone_digit](./screenshots/Phone_digits_only.png) |
+| 47 | POST /users      | Negative (validation)    | ✅ Pass    | ![Create User_Phone_short](./screenshots/Phone_short.png)       |
+| 48 | POST /users      | Negative (Invalid)       | ✅ Pass    | ![Create User_Phone_length](./screenshots/Phone_length.png)     |
+| 49 | POST /users      | Negative (Invalid)       | ✅ Pass    | ![Create User_Phone_empty](./screenshots/Phone_empty.png)       |
+| 50 | POST /users      | Negative (Invalid)       | ✅ Pass    | ![Create User_Phone_Invalid](./screenshots/Phone_Invalid.png)   |
+| 51 | POST /users      | Negative (Invalid)       | ❌ Fail    | ![Create User_BUG-004](./screenshots/BUG-004.png)               |
+| 52 | POST /login      | Positive (Valid Login)   | ✅ Pass    | ![Create User_Valid_Login](./screenshots/Valid_Login.png)       |
+| 53 | POST /login      | Negative (Invalid)       | ✅ Pass    | ![Create User_Login](./screenshots/Login_Wrong_password.png)    |
+| 54 | POST /login      | Negative (Invalid)       | ✅ Pass    | ![Create User_L](./screenshots/Login_Non_existent_username.png) |
+| 55 | POST /login      | Negative (Invalid)       | ✅ Pass    | ![Create User_Login_](./screenshots/Login_Missing_password.png) |
+| 56 | POST /login      | Negative (Invalid)       | ✅ Pass    | ![Create User_Login](./screenshots/Login_Empty_password.png)    |
+| 57 | PUT /users       | Positive (Valid)         | ✅ Pass    | ![PUT-UPDATE-Self Update](./screenshots/Self_Update.png)        |
+| 58 | PUT /users       | Negative (Invalid)       | ✅ Pass    | ![PUT-UPDATE-Missing_Bearer](./screenshots/Missing_Bearer.png)  |
+| 59 | PUT /users       | Negative (Invalid)       | ❌ Fail    | ![PUT-UPDATE-BUG-005](./screenshots/BUG-005.png)                |
+| 60 | PUT /users       | Negative (Invalid)       | ❌ Fail    | ![PUT-UPDATE-BUG-006](./screenshots/BUG-006.png)                |
+| 61 | PUT /users       | Negative (Invalid)       | ❌ Fail    | ![PUT-UPDATE-BUG-007](./screenshots/BUG-007.png)                |
+| 62 | PUT /users       | Functional               | ✅ Pass    | ![PUT-UPDATE-selfId](./screenshots/selfId.png)                  |
+| 63 | PUT /users       | Negative (Invalid)       | ✅ Pass    | ![PUT-UPDATE-Basic_Auth](./screenshots/Basic_Auth.png)          |
+| 64 | PUT /users       | Negative (Invalid)       | ❌ Fail    | ![PUT-UPDATE-BUG-008](./screenshots/BUG-008.png)                |
+| 65 | DELETE /users    | Positive (Valid)         | ✅ Pass    | ![DELETE-Delete_Admin](./screenshots/Delete_Admin.png)          |
+| 66 | DELETE /users    | Negative (Invalid)       | ✅ Pass    | ![DELETE-Delete_M](./screenshots/Delete_Missing_Basic_Auth.png) |
+| 67 | DELETE /users    | Functional (Wrong)       | ✅ Pass    | ![DELETE-Delete_W](./screenshots/Delete_Wrong_Auth_Scheme.png)  |
+| 68 | DELETE /users    | Negative (Invalid)       | ✅ Pass    | ![DELETE-Delete](./screenshots/Delete_Non-existent_user.png)    |
+| 69 | DELETE /users    | Positive (Idempotent)    | ✅ Pass    | ![DELETE-Delete_Idempotent](./screenshots/Delete_Idempotent.png)|
+| 70 | DELETE /users    | Positive (Authorization) | ❌ Fail    | ![DELETE-Delete_BUG-009](./screenshots/BUG-009.png)             |
+| 71 | DELETE /users    | Positive (Policy)        | ❌ Fail    | ![DELETE-Delete_BUG-010](./screenshots/BUG-010.png)             |
+| 72 | GET /users/      | Positive (Observed)      | ✅ Pass    | ![DELETE-GET](./screenshots/GET_Check_Observed_Soft.png)        |
+| 73 | GET /users       | Functional (Hard-delete) | ❌ Fail    | ![DELETE-GET-](./screenshots/GET-Hard-delete_expectation.png)   |
+| 74 | DELETE /users    | Negative (Invalid)       | ✅ Pass    | ![DELETE-Delete](./screenshots/Delete_Invalid_path_format.png)  |
+| 75 | POST /users      | Positive (Rate)          | ✅ Pass    | ![POST-Users_Rate_Limit](./screenshots/Users_Rate_Limit.png)    |
+| 76 | POST /login      | Functional (No Rate)     | ❌ Fail    | ![POST-Login_Brute_](./screenshots/Login_Brute_Force_Risk.png)  |
+| 77 | GET /stats       | Functional               | ❌ Fail    | ![GET-Token_BUG-011](./screenshots/BUG-011.png)                 |
+| 78 | POST /logout     | Negative                 | ❌ Fail    | ![POST-Logout_BUG-012_A](./screenshots/BUG-012_A.png)           |
+| 79 | POST /logout     | Negative (validation)    | ✅ Pass    | ![POST-Logout_check](./screenshots/Logout_check.png)            |
+| 80 | GET /health      | Positive (Positive)      | ✅ Pass    | ![GET-health_login_logou](./screenshots/health_login_logout.png)|
+| 81 | POST /login      | Regression (Regression)  | ✅ Pass    | ![POST-Login_Regression](./screenshots/Login_Regression.png)    |
+
+
+**Totals:** Tests: <79> • Pass: <65> • Fail: <14> • Pass Rate: 82.28%*
+
+## Timing & Performance (observed)
+
+-Avg response (login): ~4–15 ms | health: ~5–20 ms
+-Rate limit: 429 returned after >100 req/min (by design)
+
+## Bug Summary (top findings)
+
+|BUG-001      |– Username case sensitivity not enforced (Severity: High).
+|BUG-002/003  |– Email uniqueness not enforced (case-insensitive) (Severity: High).
+|BUG-004      |– Phone validation accepts “+00…” prefix (Severity: High).
+|BUG-005      |– Missing ownership check: user can PUT update other users (IDOR/BOLA) (Severity: Critical).
+|BUG-006/007  |– Update accepts non-digit or 16-digit phone (Severity: High).
+|BUG-008      |– Update accepts unexpected field username (should be rejected) (Severity: Medium–High) — see
+|BUG-009      |– Authorization gap: non-admin can DELETE other users (Severity: Critical). 
+|BUG-010      |– Self-delete allowed: user can DELETE /users/{selfId} and deactivate own account (Severity: High) — see
+|BUG-011      |– Sensitive data exposure in /stats?include_details=true (emails & session tokens) (Severity: Critical) — see
+|BUG-012      |– /logout returns 200 for missing/invalid Bearer (expected 401) (Severity: Medium).
+
+## Security/Resilience Checks 
+
+Session invalidation  : OK. After logout, reusing the same token on a protected endpoint returns 401 “Invalid session” (Test #79).
+Account lockout / backoff: Not implemented. In Test #81, 4 wrong-password attempts return 401 and the 5th with the correct password succeeds (200 + token). Also, Test #76 shows no login rate-limit (no 429 after 101 attempts).
+Token expiry          : expires_in is returned, but the expiry check inside verify_session is commented out (not enforced).
+Health metrics        : memory_users / memory_sessions reflect deltas and the login→logout flow, but they’re computed as string lengths, not true counts (misleading). Flow validated in Test #80.
+
+**Additional notes**
+POST /logout with missing/invalid Bearer returns 200 instead of 401 (inconsistent session semantics).
+GET /stats?include_details=true exposes emails and active session tokens without authentication (information disclosure).
+
+## Recommendations (prioritized)
+
+1.Enforce lockout/backoff after N failed logins (Tests #81, #76). Add per-IP and per-username throttling, jitter, and audit logging.
+2.Re-enable session expiry in verify_session (enforce expires_at) and add a test that validates expired tokens are rejected.
+3.In /health, report real counts using len(users_db) and len(sessions) (not string length). Keep status/timestamp. (See Test #80 for flow.)
+4.For /users listing, sort by created_at as datetime (not string) to guarantee stable ordering with order=asc|desc.
+5.Add unit/contract tests for: case-insensitive username/email uniqueness, E.164 phone validation, ownership/RBAC on update/delete, logout → 401 for missing/invalid Bearer, and /stats?include_details=true requires auth.
+
+## Appendix
+    |Screenshots folder: ./screenshots/ (e.g., Logout_check.png, health_login_logout.png, Login_Regression.png, list_users_success.png)
+
+    |Environment vars: {{baseUrl}} = http://localhost:8000
+
+    |Artifacts: test_cases.md, bugs_report.md, test_report.md, test_api.py
+
+## Note
+
+    There are 14 failures; 12 were filed as bugs. The remaining 2 are “design differences” (by design/intentional behavior) and were not reported as bugs.
+
+
+
+
+
+
+
